@@ -16,16 +16,12 @@ def create_user():
     message = {}
     if 'username' not in data or not data.get('username', None):
         message['username'] = 'Please provide a valid username.'
-    pattern = '^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$'
-    if 'email' not in data or not re.match(pattern, data.get('email', None)):
-        message['email'] = 'Please provide a valid email address.'
     if 'password' not in data or not data.get('password', None):
         message['password'] = 'Please provide a valid password.'
-
+    if 'department' not in data or not data.get('department',None):
+        message['department'] = 'Please choose your department'
     if User.query.filter_by(username=data.get('username', None)).first():
         message['username'] = 'Please use a different username.'
-    if User.query.filter_by(email=data.get('email', None)).first():
-        message['email'] = 'Please use a different email address.'
     if message:
         return bad_request(message)
 
