@@ -1,8 +1,10 @@
+from operator import index
+from sqlalchemy.sql.functions import register_function
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from flask import url_for
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import os
 
 class PaginatedAPIMixin(object):
@@ -29,12 +31,18 @@ class PaginatedAPIMixin(object):
         return data
 
 class User(PaginatedAPIMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+
+    __tablename__  = 'user'
+
+    id = db.Column(db.Integer, primary_key=True, index=True)
     username = db.Column(db.String(64), index=True, unique=True)
-    email = db.Column(db.String(120), index=True, unique=True)
     password_hash = db.Column(db.String(128))  # 不保存原始密码
     token = db.Column(db.String(32), index=True, unique=True)
     token_expiration = db.Column(db.DateTime)
+    role = db.Column(db.String(64))
+    department = db.Column(db.String(64))
+    applications = db.relationship('Application',backref=db.backref('user'))
+
 
     def __repr__(self):
         return '<User {}>'.format(self.username)
@@ -45,24 +53,25 @@ class User(PaginatedAPIMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def to_dict(self, include_email=False):
+    def to_dict(self):
         data = {
             'id': self.id,
             'username': self.username,
+            'department':self.department,
+            'role':self.role,
             '_links': {
                 'self': url_for('api.get_user', id=self.id)
             }
         }
-        if include_email:
-            data['email'] = self.email
         return data
     
     def from_dict(self, data, new_user=False):
-        for field in ['username', 'email']:
+        for field in ['id','username', 'department','role']:
             if field in data:
                 setattr(self, field, data[field])
         if new_user and 'password' in data:
             self.set_password(data['password'])
+            self.role = 'user'
 
     def get_token(self, expires_in=3600):
         now = datetime.utcnow()
@@ -82,3 +91,78 @@ class User(PaginatedAPIMixin, db.Model):
         if user is None or user.token_expiration < datetime.utcnow():
             return None
         return user
+
+class Asset(db.Model):
+
+    __tablename__  = 'asset'
+
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    assetname = db.Column(db.String(64), index=True)
+    registertime = db.Column(db.DateTime)
+    department = db.Column(db.String(64))
+    remarks = db.Column(db.String(64))
+    state = db.Column(db.String(32))
+    applications = db.relationship('Application',backref=db.backref('asset'))
+
+    def __repr__(self):
+        return '<Asset {}>'.format(self.assetname)
+
+    def from_dict(self, data, new_asset=False):
+        for field in ['id','assetname','department','remarks','state']:
+            if field in data:
+                setattr(self, field, data[field])
+        if 'registertime' in data:
+            setattr(self,'registertime',date.fromisoformat(data['registertime']))
+        if new_asset:
+            self.state = '空闲'
+
+    def to_dict(self):
+        data = {
+            'id': self.id,
+            'assetname': self.assetname,
+            'registertime':self.registertime.isoformat()[:10],
+            'department':self.department,
+            'remarks':self.remarks,
+            'state':self.state,
+            '_links': {
+                'self': url_for('api.get_user', id=self.id)
+            }
+        }
+        return data
+
+class Application(db.Model):
+
+    __tablename__  = 'application'
+
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    assetid = db.Column(db.Integer,db.ForeignKey('asset.id'),index=True)
+    userid = db.Column(db.Integer,db.ForeignKey('user.id'),index=True)
+    applytime = db.Column(db.DateTime)
+    expecttime = db.Column(db.DateTime)
+    remarks = db.Column(db.String(64))
+    state = db.Column(db.String(32))
+
+    def __repr__(self):
+        return '<Application {}>'.format(self.assetname)
+
+    def from_dict(self, data, new_apply=False):
+        for field in ['id','assetid','userid', 'applytime','expecttime','remarks','state']:
+            if field in data:
+                setattr(self, field, data[field])
+        if new_apply:
+            self.state = '审核中'
+
+    def to_dict(self):
+        data = {
+            'id': self.id,
+            'assetid': self.assetid,
+            'userid':self.userid,
+            'applytime':self.applytime,
+            'expecttime':self.expecttime,
+            'remarks': self.remarks,
+            'state':self.state,
+            '_links': {
+                'self': url_for('api.get_user', id=self.id)
+            }
+        }
+        return data
