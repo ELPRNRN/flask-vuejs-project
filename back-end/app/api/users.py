@@ -33,7 +33,6 @@ def create_user():
     response.status_code = 201
     # HTTP协议要求201响应包含一个值为新资源URL的Location头部
     response.headers['Location'] = url_for('api.get_user', id=user.id)
-    return response
 
 
 @bp.route('/users', methods=['GET'])

@@ -92,7 +92,7 @@ class User(PaginatedAPIMixin, db.Model):
             return None
         return user
 
-class Asset(db.Model):
+class Asset(PaginatedAPIMixin, db.Model):
 
     __tablename__  = 'asset'
 
@@ -125,12 +125,12 @@ class Asset(db.Model):
             'remarks':self.remarks,
             'state':self.state,
             '_links': {
-                'self': url_for('api.get_user', id=self.id)
+                'self': url_for('api.get_asset', id=self.id)
             }
         }
         return data
 
-class Application(db.Model):
+class Application(PaginatedAPIMixin,db.Model):
 
     __tablename__  = 'application'
 
@@ -145,24 +145,36 @@ class Application(db.Model):
     def __repr__(self):
         return '<Application {}>'.format(self.assetname)
 
-    def from_dict(self, data, new_apply=False):
-        for field in ['id','assetid','userid', 'applytime','expecttime','remarks','state']:
+    def from_dict(self, data, new_application=False):
+        if('username' in data):
+            applyuser = User.query.filter(User.username == data['username']).first()
+            setattr(self,'userid',applyuser.id)
+        for field in ['id','assetid','userid','remarks','state']:
             if field in data:
                 setattr(self, field, data[field])
-        if new_apply:
+        for timefield in['expecttime','applytime']:
+            if timefield in data:
+                setattr(self,timefield,date.fromisoformat(data['expecttime']))
+        if new_application:
             self.state = '审核中'
+            self.applytime = datetime.now()
+            
 
     def to_dict(self):
         data = {
             'id': self.id,
             'assetid': self.assetid,
+            'assetname': self.asset.assetname,
+            'assetstate': self.asset.state,
             'userid':self.userid,
-            'applytime':self.applytime,
-            'expecttime':self.expecttime,
+            'username':self.user.username,
+            'userdepartment':self.user.department,
+            'applytime':self.applytime.isoformat()[:10],
+            'expecttime':self.expecttime.isoformat()[:10],
             'remarks': self.remarks,
             'state':self.state,
             '_links': {
-                'self': url_for('api.get_user', id=self.id)
+                'self': url_for('api.get_application', id=self.id)
             }
         }
         return data
