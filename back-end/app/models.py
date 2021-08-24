@@ -2,10 +2,11 @@ from operator import index
 from sqlalchemy.sql.functions import register_function
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
-from flask import url_for
+from flask import url_for, current_app
 import base64
 from datetime import datetime, timedelta, date
 import os
+import jwt
 
 class PaginatedAPIMixin(object):
     @staticmethod
@@ -37,8 +38,6 @@ class User(PaginatedAPIMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, index=True)
     username = db.Column(db.String(64), index=True, unique=True)
     password_hash = db.Column(db.String(128))  # 不保存原始密码
-    token = db.Column(db.String(32), index=True, unique=True)
-    token_expiration = db.Column(db.DateTime)
     role = db.Column(db.String(64))
     department = db.Column(db.String(64))
     applications = db.relationship('Application',backref=db.backref('user'))
@@ -72,25 +71,31 @@ class User(PaginatedAPIMixin, db.Model):
         if new_user and 'password' in data:
             self.set_password(data['password'])
             self.role = 'user'
-
-    def get_token(self, expires_in=3600):
+    
+    def get_jwt(self, expires_in=3600):
         now = datetime.utcnow()
-        if self.token and self.token_expiration > now + timedelta(seconds=60):
-            return self.token
-        self.token = base64.b64encode(os.urandom(24)).decode('utf-8')
-        self.token_expiration = now + timedelta(seconds=expires_in)
-        db.session.add(self)
-        return self.token
-
-    def revoke_token(self):
-        self.token_expiration = datetime.utcnow() - timedelta(seconds=1)
-
+        payload = {
+            'user_id': self.id,
+            'user_name': self.username,
+            'role':self.role,
+            'exp': now + timedelta(seconds=expires_in),
+            'iat': now
+        }
+        return jwt.encode(
+            payload,
+            current_app.config['SECRET_KEY'],
+            algorithm='HS256')
     @staticmethod
-    def check_token(token):
-        user = User.query.filter_by(token=token).first()
-        if user is None or user.token_expiration < datetime.utcnow():
+    def verify_jwt(token):
+        try:
+            payload = jwt.decode(
+                token,
+                current_app.config['SECRET_KEY'],
+                algorithms=['HS256'])
+        except (jwt.exceptions.ExpiredSignatureError, jwt.exceptions.InvalidSignatureError) as e:
+            # Token过期，或被人修改，那么签名验证也会失败
             return None
-        return user
+        return User.query.get(payload.get('user_id'))
 
 class Asset(PaginatedAPIMixin, db.Model):
 
@@ -143,7 +148,7 @@ class Application(PaginatedAPIMixin,db.Model):
     state = db.Column(db.String(32))
 
     def __repr__(self):
-        return '<Application {}>'.format(self.assetname)
+        return '<Application {}>'.format(self.id)
 
     def from_dict(self, data, new_application=False):
         if('username' in data):
@@ -154,7 +159,7 @@ class Application(PaginatedAPIMixin,db.Model):
                 setattr(self, field, data[field])
         for timefield in['expecttime','applytime']:
             if timefield in data:
-                setattr(self,timefield,date.fromisoformat(data['expecttime']))
+                setattr(self,timefield,date.fromisoformat(data[timefield]))
         if new_application:
             self.state = '审核中'
             self.applytime = datetime.now()
@@ -175,6 +180,35 @@ class Application(PaginatedAPIMixin,db.Model):
             'state':self.state,
             '_links': {
                 'self': url_for('api.get_application', id=self.id)
+            }
+        }
+        return data
+
+class DaylyRecord(db.Model):
+
+    __tablename__  = 'daylyrecord'
+    id = db.Column(db.Integer, primary_key=True, index=True)
+    date = db.Column(db.String(32),index=True)
+    total_assets = db.Column(db.Integer)
+    spare_assets = db.Column(db.Integer)
+    in_user_assets = db.Column(db.Integer)
+    discarded_assets = db.Column(db.Integer)
+    applications = db.Column(db.Integer)
+
+    def __repr__(self):
+        return '<DaylyRecord {}>'.format(self.date)
+
+    def to_dict(self):
+        data = {
+            'id': self.id,
+            'date': self.date,
+            'total_assets' : self.total_assets,
+            'spare_assets' : self.spare_assets,
+            'in_user_assets' : self.in_user_assets,
+            'discarded_assets' : self.discarded_assets,
+            'applications' : self.applications,
+            '_links': {
+                'self': url_for('api.charts_data')
             }
         }
         return data

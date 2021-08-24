@@ -15,13 +15,13 @@ def create_asset():
 
     message = {}
     if 'assetname' not in data or not data.get('assetname', None):
-        message['assetname'] = 'Please provide a valid assetname.'
+        message['assetname'] = '请提供有效的资产名！'
     if 'registertime' not in data or not data.get('registertime', None):
-        message['registertime'] = 'Please provide a valid registertime.'
+        message['registertime'] = '请提供有效的注册时间！'
     if 'department' not in data or not data.get('department',None):
-        message['department'] = 'Please choose your department'
+        message['department'] = '请选择资产部门！'
     if 'remarks' not in data or not data.get('remarks',None):
-        message['remarks'] = 'Please provide your remarks'
+        message['remarks'] = '请输入备注！'
     if message:
         return bad_request(message)
 
@@ -86,15 +86,15 @@ def update_asset(id):
     if not data:
         return bad_request('You must post JSON data')
     if 'assetname' not in data or not data.get('assetname', None):
-        message['assetname'] = 'Please provide a valid assetname.'
+        message['assetname'] = '请提供有效的资产名！'
     if 'registertime' not in data or not data.get('registertime', None):
-        message['registertime'] = 'Please provide a valid registertime.'
+        message['registertime'] = '请提供有效的资产时间！'
     if 'department' not in data or not data.get('department',None):
-        message['department'] = 'Please choose asset department'
+        message['department'] = '请选择资产部门！'
     if 'remarks' not in data or not data.get('remarks',None):
-        message['remarks'] = 'Please provide your remarks'
+        message['remarks'] = '请输入备注！'
     if 'state' not in data or not data.get('state',None):
-        message['state'] = 'Please provide asset state'
+        message['state'] = '请输入资产状态！'
     if message:
         return bad_request(message)
     

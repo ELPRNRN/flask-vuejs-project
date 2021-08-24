@@ -1,5 +1,5 @@
 import re
-from flask import request, jsonify, url_for
+from flask import json, request, jsonify, url_for
 from app import db
 from app.api import bp
 from app.api.errors import bad_request
@@ -15,13 +15,13 @@ def create_user():
 
     message = {}
     if 'username' not in data or not data.get('username', None):
-        message['username'] = 'Please provide a valid username.'
+        message['username'] = '请提供一个有效的用户名！'
     if 'password' not in data or not data.get('password', None):
-        message['password'] = 'Please provide a valid password.'
+        message['password'] = '请提供一个有效的密码！'
     if 'department' not in data or not data.get('department',None):
-        message['department'] = 'Please choose your department'
+        message['department'] = '请选择你的部门！'
     if User.query.filter_by(username=data.get('username', None)).first():
-        message['username'] = 'Please use a different username.'
+        message['username'] = '请使用不同的用户名！'
     if message:
         return bad_request(message)
 
@@ -33,6 +33,7 @@ def create_user():
     response.status_code = 201
     # HTTP协议要求201响应包含一个值为新资源URL的Location头部
     response.headers['Location'] = url_for('api.get_user', id=user.id)
+    return response
 
 
 @bp.route('/users', methods=['GET'])
@@ -60,28 +61,43 @@ def update_user(id):
     data = request.get_json()
     if not data:
         return bad_request('You must post JSON data.')
-
     message = {}
     if 'username' in data and not data.get('username', None):
-        message['username'] = 'Please provide a valid username.'
-
-    pattern = '^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$'
-    if 'email' in data and not re.match(pattern, data.get('email', None)):
-        message['email'] = 'Please provide a valid email address.'
-
+        message['username'] = '请提供有效的用户名！'
+    if 'department' in data and not data.get('department',None):
+        message['department'] = '请提供有效的部门！'
     if 'username' in data and data['username'] != user.username and \
             User.query.filter_by(username=data['username']).first():
-        message['username'] = 'Please use a different username.'
-    if 'email' in data and data['email'] != user.email and \
-            User.query.filter_by(email=data['email']).first():
-        message['email'] = 'Please use a different email address.'
-
+        message['username'] = '请使用不同的用户名！'
     if message:
         return bad_request(message)
 
     user.from_dict(data, new_user=False)
     db.session.commit()
     return jsonify(user.to_dict())
+
+
+@bp.route('/modifypassword/<int:id>', methods=['PUT'])
+@token_auth.login_required
+def modify_password(id):
+    '''修改用户密码'''
+    user = User.query.get_or_404(id)
+    data = request.get_json()
+    if not data:
+        return bad_request('You must post JSON data.')
+    message = {}
+    if 'oldpassword' in data and not data.get('oldpassword', None):
+        message['oldpassword'] = '请输入原密码！'
+    if 'newpassword' in data and not data.get('newpassword',None):
+        message['newpassword'] = '请输入新密码！'
+    if 'oldpassword' in data and not user.check_password(data['oldpassword']):
+        message['wrongpassword'] = '原密码错误！'
+    if message:
+        return bad_request(message)
+    user.set_password(data['newpassword'])
+    db.session.commit()
+    return jsonify(user.to_dict())
+    
 
 
 @bp.route('/users/<int:id>', methods=['DELETE'])

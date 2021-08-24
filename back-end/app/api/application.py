@@ -19,13 +19,13 @@ def creat_application():
     
     message = {}
     if 'assetid' not in data or not data.get('assetid', None):
-        message['assetid'] = 'Please provide a valid assetid.'
+        message['assetid'] = '请提供有效的资产编号！'
     if 'username' not in data or not data.get('username', None):
-        message['username'] = 'Please provide a valid username.'
+        message['username'] = '请提供有效的用户名！'
     if 'expecttime' not in data or not data.get('expecttime',None):
-        message['expecttime'] = 'Please choose your expecttime'
-    if  Asset.query.get_or_404(data['assetid']).state == '使用中':
-        message['assetdisable'] = 'Asset Disable for application!'
+        message['expecttime'] = '请输入使用期限！'
+    if  Asset.query.get_or_404(data['assetid']).state in ['使用中','已报废']:
+        message['assetdisable'] = '资产使用中或已报废，无法进行申请！'
     
     if message:
         return bad_request(message)
@@ -116,32 +116,59 @@ def update_application(id):
     if not data:
         return bad_request('You must post JSON data')
     if 'state' in data and not data.get('state',None):
-        message['operation'] = 'Please provide a valid operation'
+        message['operation'] = '请提供一个有效操作！'
     if(data['state'] == '已同意'):
-        if(application.asset.state == '使用中'):
-            message['assetInUse'] = '资产正在使用中，无法同意申请!'
+        if(application.asset.state in ['使用中','已报废']):
+            message['assetDisabled'] = '资产正在使用中或已报废，无法同意申请！'
         if(application.state == '已同意'):
-            message['applicationAgreed'] = '该申请已被同意!'
+            message['applicationAgreed'] = '该申请已被同意！'
         elif(application.state == '已拒绝'):
-            message['applicationDisagreed'] = '该申请已被拒绝!'
+            message['applicationDisagreed'] = '该申请已被拒绝！'
     elif(data['state']=='已拒绝'):
         if(application.state == '已同意'):
-            message['applicationAgreed'] = '该申请已被同意!'
+            message['applicationAgreed'] = '该申请已被同意！'
         elif(application.state == '已拒绝'):
-            message['applicationDisagreed'] = '该申请已被拒绝!'
-    elif(data['state']=='已归还'):
-        if(application.state == '已归还'):
-            message['applicationReturned'] = '该申请已归还资产!'
+            message['applicationDisagreed'] = '该申请已被拒绝！'
+    elif(data['state']=='已报废'):
+        if(application.state == '已报废'):
+            message['applicationDiscarded'] = '该资产已经报废！'
+    elif(data['state']=='已回收'):
+        if(application.state == '已回收'):
+            message['applicationRetrieved'] = '该资产已被回收！'
     if message:
         return bad_request(message)
     
     application.from_dict(data,new_application=False)
     if(data['state']=='已同意'):
         application.asset.state = '使用中'
-    elif(data['state']=='已归还'):
+    elif(data['state']=='已报废'):
+        application.asset.state = '已报废'
+    elif(data['state']=='已回收'):
         application.asset.state = '空闲'
     db.session.commit()
     return jsonify(application.to_dict())
-    
 
+
+@bp.route('/userOperationWithApplication/<int:id>', methods=['PUT'])
+@token_auth.login_required
+def user_operate_application(id):
+    '''用户申请回收或报废或取消'''
+    application = Application.query.get_or_404(id)
+    data = request.get_json()
+    message = {}
+    if not data:
+        return bad_request('You must post JSON data')
+    if 'state' in data and not data.get('state',None):
+        message['operation'] = '请提供一个有效操作！'
+    if(data['state'] == '已取消'):
+        if(application.state == '已同意'):
+            message['applicationAgreed'] = '该申请已被同意！'
+        elif(application.state == '已拒绝'):
+            message['applicationDisagreed'] = '该申请已被拒绝！'
+    if message:
+        return bad_request(message)
+    
+    application.from_dict(data,new_application=False)
+    db.session.commit()
+    return jsonify(application.to_dict())
     
